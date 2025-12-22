@@ -53,6 +53,7 @@ const PathOption = struct {
     /// Whether to computed path should be in the centre of the tile.
     edge_centered: bool = false,
 };
+```
 
 ## A* heuristics
 ```zig
