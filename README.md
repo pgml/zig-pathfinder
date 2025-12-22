@@ -76,7 +76,12 @@ pub const Heuristic = enum {
 const zpf = @import("zig_pathfinder");
 
 pub fn main() !void {
-    const pathfinder: *zpf = try .init();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer if (gpa.deinit() == .leak) std.process.exit(1);
+    const alloc = gpa.allocator();
+
+    const pathfinder: *zpf = try .init(alloc, .{});
+    defer alloc.destroy(pathfinder);
     defer pathfinder.deinit();
 
     // Set the grid size for a 40x30 tilemap.
@@ -107,10 +112,11 @@ pub fn main() !void {
         .heuristic = .chebyshev,
     });
 
-    for (pathfinder.getResult()) |path_node| {
-        std.log.debug("path node: {}", .{path_node);
+    if (pathfinder.getResult()) |path| {
+        for (path) |node| {
+            std.log.debug("path node: {}", .{node.pos});
+        }
     }
-
     // result (10:15) and (11:15) are avoided:
     //
     // debug: path node: .{ .x = 10, .y = 11 }
