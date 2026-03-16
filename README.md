@@ -29,7 +29,7 @@ exe.root_module.addImport("zig_pathfinder", zpf.module("zig_pathfinder"));
 ```zig
 /// General pathfinder options
 const Option = struct {
-    /// Wether to use a separate thread to find a path for non-blocking 
+    /// Wether to use a separate thread to find a path for non-blocking
     /// pathfinding
     use_separate_thead: bool = false,
 };
@@ -52,6 +52,9 @@ const PathOption = struct {
 
     /// Whether to computed path should be in the centre of the tile.
     edge_centered: bool = false,
+
+    /// Whether corner cutting should be allowed.
+    corner_cutting: bool = false,
 };
 ```
 
