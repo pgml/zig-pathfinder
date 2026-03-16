@@ -17,6 +17,9 @@ processed: std.ArrayList(*PathNode) = .empty,
 /// Whether diagonal movement should be allowed.
 diagonal: bool,
 
+/// Whether corner cutting should be allowed.
+corner_cutting: bool = false,
+
 /// The PathNode of the starting position.
 start_node: *PathNode,
 
@@ -61,6 +64,7 @@ pub fn init(alloc: std.mem.Allocator, path: *Path) anyerror!void {
     var self: AStar = .{
         .alloc = alloc,
         .diagonal = path.opts.movement == .diagonal,
+        .corner_cutting = path.opts.corner_cutting,
         .path = path,
         .start_node = path.start_node,
         .target_node = path.target_node,
@@ -74,11 +78,13 @@ fn find(self: *AStar) !void {
     try self.start_node.cacheNeighbours(
         self.start_node.pos,
         self.diagonal,
+        self.corner_cutting,
         self.path.non_walkable_tiles,
     );
     try self.target_node.cacheNeighbours(
         self.target_node.pos,
         self.diagonal,
+        self.corner_cutting,
         self.path.non_walkable_tiles,
     );
 
@@ -110,7 +116,7 @@ fn find(self: *AStar) !void {
 
         // Iterate through all the neighbouring nodes and determine the cost
         for (self.current.neighbours.items) |neighbour| {
-            if (!neighbour.isWalkable(self.path.non_walkable_tiles) and
+            if (!neighbour.isWalkable(self.path.non_walkable_tiles) or
                 pf.nodesContain(self.processed, neighbour))
             {
                 continue;
@@ -176,6 +182,7 @@ fn findConnection(self: *AStar, node: *PathNode) !void {
         node.cacheNeighbours(
             node.pos,
             self.diagonal,
+            self.corner_cutting,
             self.path.non_walkable_tiles,
         ) catch |e| {
             std.log.err("Failed to cache neighbouring nodes. {}", .{e});

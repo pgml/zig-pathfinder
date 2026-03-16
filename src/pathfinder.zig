@@ -89,6 +89,9 @@ const PathOption = struct {
 
     /// Whether to computed path should be in the centre of the tile.
     edge_centered: bool = false,
+
+    /// Whether corner cutting should be allowed.
+    corner_cutting: bool = false,
 };
 
 /// Path holds information about the found path.
@@ -182,12 +185,13 @@ pub const PathNode = struct {
         self: *PathNode,
         pos: Vector2,
         diagonal: bool,
+        corner_cutting: bool,
         non_walkable_tiles: *std.ArrayList(Vector2),
     ) !void {
         self.neighbours.clearAndFree(self.alloc);
 
         // cache all orthogonal neighbours first
-        for (getDirections(.orthogonal)) |dir| {
+        for (Pathfinder.getDirections(.orthogonal)) |dir| {
             // get the neighbouring tile
             const tile = pos.add(dir);
 
@@ -200,30 +204,38 @@ pub const PathNode = struct {
         }
 
         // if we allow diagonal movement cache the diagonal neighbours
-        if (diagonal) {
-            for (getDirections(.diagonal)) |dir| {
-                // get the neighbouring tile
-                const tile = pos.add(dir);
+        if (!diagonal) {
+            return;
+        }
 
-                if (!vec2IsWalkable(tile, non_walkable_tiles)) {
+        for (Pathfinder.getDirections(.diagonal)) |dir| {
+            // get the neighbouring tile
+            const tile = pos.add(dir);
+
+            if (!vec2IsWalkable(tile, non_walkable_tiles)) {
+                continue;
+            }
+
+            if (!corner_cutting) {
+                const h_neighbours = pos.add(.{ .x = dir.y, .y = 0 });
+                const v_neighbours = pos.add(.{ .x = 0, .y = dir.x });
+
+                if (!vec2IsWalkable(h_neighbours, non_walkable_tiles) or
+                    !vec2IsWalkable(v_neighbours, non_walkable_tiles))
+                {
                     continue;
                 }
-
-                const node = PathNode.init(tile, self.alloc) catch continue;
-                try self.neighbours.append(self.alloc, node);
             }
-        }
-    }
 
-    fn getDirections(movement: Movement) [4]Vector2 {
-        return switch (movement) {
-            .orthogonal => .{ .init(0, 1), .init(-1, 0), .init(0, -1), .init(1, 0) },
-            .diagonal => .{ .init(1, 1), .init(1, -1), .init(-1, -1), .init(-1, 1) },
-        };
+            const node = PathNode.init(tile, self.alloc) catch continue;
+            try self.neighbours.append(self.alloc, node);
+        }
     }
 
     /// Returns whether the path node is walkable and can be
     /// included in the pathfinding process.
+    /// This means the node itself is not in the `non_walkable_list` as well
+    /// as the orthogonal neighbours to avoid corner cutting.
     pub fn isWalkable(
         self: PathNode,
         non_walkable_tiles: *std.ArrayList(Vector2),
@@ -545,6 +557,41 @@ test "find the shortest path" {
         // we should, in this case, get more than 10 PathNodes because we're
         // trying to avoid .{ .x = 10, .y = 15 }
         try std.testing.expect(p.len > 10);
+    }
+}
+
+test "find the shortest path (no corner cutting)" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(gpa.deinit() == .leak) catch {};
+    const alloc = gpa.allocator();
+
+    const pf = try Pathfinder.init(alloc, .{});
+    defer alloc.destroy(pf);
+    defer pf.deinit();
+
+    pf.setGridSize(40, 30);
+
+    var non_walkable = [_]@Vector(2, f32){
+        .{ 18, 18 },
+        .{ 19, 17 },
+    };
+
+    try pf.setNonWalkableTiles(&non_walkable);
+
+    try pf.findPath(.{ 17, 16 }, .{ 20, 19 }, .{
+        .movement = .diagonal,
+        .heuristic = .chebyshev,
+        .corner_cutting = false,
+    });
+
+    const path = pf.getResult();
+    try std.testing.expect(path != null);
+
+    if (path) |p| {
+        // with diagonal movement there should be precisely 3 nodes found in the
+        // path with corner cutting (18:17, 19:18 and 20:19).
+        // So if it's more then that we're golden.
+        try std.testing.expect(p.len > 3);
     }
 }
 
