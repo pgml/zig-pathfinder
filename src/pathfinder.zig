@@ -130,7 +130,7 @@ pub const PathNode = struct {
     /// This must be the arena allocator that is used to find the path
     /// so that we can easily clean up all allocations used for the
     /// pathfinding process.
-    arena_alloc: std.mem.Allocator,
+    alloc: std.mem.Allocator,
 
     /// The position of the node on the grid.
     pos: Vector2,
@@ -150,10 +150,10 @@ pub const PathNode = struct {
 
     pub fn init(
         position: Vector2,
-        arena_alloc: std.mem.Allocator,
+        alloc: std.mem.Allocator,
     ) !*PathNode {
-        const self = try arena_alloc.create(PathNode);
-        self.* = .{ .arena_alloc = arena_alloc, .pos = position };
+        const self = try alloc.create(PathNode);
+        self.* = .{ .alloc = alloc, .pos = position };
         return self;
     }
 
@@ -184,7 +184,7 @@ pub const PathNode = struct {
         diagonal: bool,
         non_walkable_tiles: *std.ArrayList(Vector2),
     ) !void {
-        self.neighbours.clearAndFree(self.arena_alloc);
+        self.neighbours.clearAndFree(self.alloc);
 
         // cache all orthogonal neighbours first
         for (getDirections(.orthogonal)) |dir| {
@@ -195,8 +195,8 @@ pub const PathNode = struct {
                 continue;
             }
 
-            const node = PathNode.init(tile, self.arena_alloc) catch continue;
-            try self.neighbours.append(self.arena_alloc, node);
+            const node = PathNode.init(tile, self.alloc) catch continue;
+            try self.neighbours.append(self.alloc, node);
         }
 
         // if we allow diagonal movement cache the diagonal neighbours
@@ -209,8 +209,8 @@ pub const PathNode = struct {
                     continue;
                 }
 
-                const node = PathNode.init(tile, self.arena_alloc) catch continue;
-                try self.neighbours.append(self.arena_alloc, node);
+                const node = PathNode.init(tile, self.alloc) catch continue;
+                try self.neighbours.append(self.alloc, node);
             }
         }
     }
@@ -238,6 +238,7 @@ pub const PathNode = struct {
                 return false;
             }
         }
+
         return true;
     }
 };
@@ -323,7 +324,7 @@ pub fn findPath(
     }
 }
 
-pub fn find(self: *Pathfinder, arena_alloc: std.mem.Allocator) !void {
+fn find(self: *Pathfinder, alloc: std.mem.Allocator) !void {
     const is_in_bounds = self.path.start_node.pos.x <= self.grid_width and
         self.path.target_node.pos.y <= self.grid_height;
 
@@ -334,7 +335,7 @@ pub fn find(self: *Pathfinder, arena_alloc: std.mem.Allocator) !void {
     }
 
     switch (self.path.opts.algorithm) {
-        .astar => try AStar.init(arena_alloc, &self.path),
+        .astar => try AStar.init(alloc, &self.path),
     }
 }
 
@@ -399,8 +400,10 @@ pub fn setGridSize(self: *Pathfinder, width: u32, height: u32) void {
 
 pub fn deinit(self: *Pathfinder) void {
     self.mutex.lock();
-    self.quit = true;
-    self.cond.signal();
+    {
+        self.quit = true;
+        self.cond.signal();
+    }
     self.mutex.unlock();
 
     if (self.thread) |thread| {
@@ -411,7 +414,14 @@ pub fn deinit(self: *Pathfinder) void {
     self.work_arena.deinit();
 }
 
-fn vec2IsWalkable(
+pub fn getDirections(movement: Movement) [4]Vector2 {
+    return switch (movement) {
+        .orthogonal => .{ .init(0, 1), .init(-1, 0), .init(0, -1), .init(1, 0) },
+        .diagonal => .{ .init(1, 1), .init(1, -1), .init(-1, -1), .init(-1, 1) },
+    };
+}
+
+pub fn vec2IsWalkable(
     vec2: Vector2,
     non_walkable_tiles: *std.ArrayList(Vector2),
 ) bool {
