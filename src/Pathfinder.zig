@@ -1,7 +1,7 @@
 pub const Pathfinder = @This();
 
 const std = @import("std");
-const AStar = @import("astar.zig");
+const AStar = @import("AStar.zig");
 
 /// The main pathfinder arena.
 arena: std.heap.ArenaAllocator,

@@ -2,7 +2,7 @@
 const AStar = @This();
 const std = @import("std");
 
-const pf = @import("pathfinder.zig");
+const pf = @import("Pathfinder.zig");
 const Path = pf.Path;
 const PathNode = pf.PathNode;
 
